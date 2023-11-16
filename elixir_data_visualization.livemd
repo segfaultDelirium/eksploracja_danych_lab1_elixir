@@ -39,6 +39,8 @@ Vl.new()
 ```
 
 ```elixir
+zip_x_y = fn x, y -> Enum.zip(x, y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end) end
+
 x0 = 0
 h = 1
 m = 20
@@ -53,7 +55,8 @@ x =
 
 y = x |> Enum.map(fn _x -> 0 end)
 
-normal_points_data = x |> Enum.zip(y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+# x |> Enum.zip(y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+normal_points_data = zip_x_y.(x, y)
 
 x = Nx.linspace(-10, 10, n: 100) |> Nx.to_list()
 f = &Math.pow(Math.e(), -Math.pow((&1 - x0) / h, 2))
@@ -64,12 +67,40 @@ normal_distribution_line =
   |> Enum.zip(y)
   |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
 
+x0 = 5
+h = 1
+m = 80
+
+x =
+  Nx.Random.normal(key, x0, h, shape: {m}, type: :f32)
+  |> (&elem(&1, 0)).()
+  |> Nx.to_list()
+
+y = x |> Enum.map(fn _x -> 0 end)
+# x |> Enum.zip(y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+normal_points_moved_right_data = zip_x_y.(x, y)
+
+x = Nx.linspace(-10, 10, n: 100) |> Nx.to_list()
+
+f = fn x ->
+  0.8 / (Math.sqrt(2 * Math.pi()) * h) *
+    Math.pow(Math.e(), -0.5 * Math.pow((x - 5) / h, 2)) +
+    0.2 / (Math.sqrt(2 * Math.pi()) * h) *
+      Math.pow(Math.e(), -0.5 * Math.pow((x - 0) / h, 2))
+end
+
+y = x |> Enum.map(&f.(&1))
+
+camel_data = zip_x_y.(x, y)
+
 add_category = fn map, category -> Map.put(map, "category", category) end
 
 data =
   [
     normal_points_data |> Enum.map(&add_category.(&1, "A")),
-    normal_distribution_line |> Enum.map(&add_category.(&1, "B"))
+    normal_distribution_line |> Enum.map(&add_category.(&1, "B")),
+    normal_points_moved_right_data |> Enum.map(&add_category.(&1, "C")),
+    camel_data |> Enum.map(&add_category.(&1, "D"))
   ]
   |> List.flatten()
 ```
@@ -78,7 +109,7 @@ data =
 x_limit = [-10, 10]
 y_limit = [0, 0.5]
 
-Vl.new()
+Vl.new(width: 600, height: 400)
 |> Vl.data_from_values(data, only: ["x", "y", "category"])
 |> Vl.layers([
   Vl.new()
@@ -90,6 +121,18 @@ Vl.new()
   Vl.new()
   |> Vl.transform(filter: "datum.category == 'A'")
   |> Vl.mark(:tick)
+  |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
+  |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
+  |> Vl.encode_field(:color, "category", type: :nominal),
+  Vl.new()
+  |> Vl.transform(filter: "datum.category == 'C'")
+  |> Vl.mark(:tick)
+  |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
+  |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
+  |> Vl.encode_field(:color, "category", type: :nominal),
+  Vl.new()
+  |> Vl.transform(filter: "datum.category == 'D'")
+  |> Vl.mark(:line)
   |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
   |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
   |> Vl.encode_field(:color, "category", type: :nominal)
