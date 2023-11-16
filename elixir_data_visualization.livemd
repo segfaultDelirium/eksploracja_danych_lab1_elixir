@@ -1,0 +1,97 @@
+# elixir_data_visualization
+
+```elixir
+Mix.install([
+  {:vega_lite, "~> 0.1.6"},
+  {:kino_vega_lite, "~> 0.1.10"},
+  {:nx, "~> 0.5"},
+  {:math, "~> 0.7.0"}
+])
+```
+
+## Section
+
+```elixir
+alias VegaLite, as: Vl
+```
+
+```elixir
+x0 = 0
+h = 1
+
+x = Nx.linspace(-10, 10, n: 100) |> Nx.to_list()
+f = &Math.pow(Math.e(), -Math.pow((&1 - x0) / h, 2))
+y = x |> Enum.map(&f.(&1))
+
+data =
+  x
+  |> Enum.zip(y)
+  |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+
+# ylimit = 0.5
+# display_data = data |> Enum.filter(fn %{"y" => y} -> y < ylimit end)
+
+Vl.new()
+|> Vl.data_from_values(data, only: ["x", "y"])
+|> Vl.mark(:line)
+|> Vl.encode_field(:x, "x", type: :quantitative)
+|> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: [0, 0.5]})
+```
+
+```elixir
+x0 = 0
+h = 1
+m = 20
+# 0..20 |> Enum.to_list() 
+# |> Enum.map(& Nx.Random.normal(Nx.Random.key(&1), x0, h, type: :f32))
+key = Nx.Random.key(System.unique_integer([:positive]))
+
+x =
+  Nx.Random.normal(key, x0, h, shape: {m}, type: :f32)
+  |> (&elem(&1, 0)).()
+  |> Nx.to_list()
+
+y = x |> Enum.map(fn _x -> 0 end)
+
+normal_points_data = x |> Enum.zip(y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+
+x = Nx.linspace(-10, 10, n: 100) |> Nx.to_list()
+f = &Math.pow(Math.e(), -Math.pow((&1 - x0) / h, 2))
+y = x |> Enum.map(&f.(&1))
+
+normal_distribution_line =
+  x
+  |> Enum.zip(y)
+  |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end)
+
+add_category = fn map, category -> Map.put(map, "category", category) end
+
+data =
+  [
+    normal_points_data |> Enum.map(&add_category.(&1, "A")),
+    normal_distribution_line |> Enum.map(&add_category.(&1, "B"))
+  ]
+  |> List.flatten()
+```
+
+```elixir
+x_limit = [-10, 10]
+y_limit = [0, 0.5]
+
+Vl.new()
+|> Vl.data_from_values(data, only: ["x", "y", "category"])
+|> Vl.layers([
+  Vl.new()
+  |> Vl.transform(filter: "datum.category == 'B'")
+  |> Vl.mark(:line)
+  |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
+  |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
+  |> Vl.encode_field(:color, "category", type: :nominal),
+  Vl.new()
+  |> Vl.transform(filter: "datum.category == 'A'")
+  |> Vl.mark(:tick)
+  |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
+  |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
+  |> Vl.encode_field(:color, "category", type: :nominal)
+])
+```
