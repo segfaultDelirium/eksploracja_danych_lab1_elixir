@@ -41,6 +41,8 @@ Vl.new()
 ```elixir
 zip_x_y = fn x, y -> Enum.zip(x, y) |> Enum.map(fn {x, y} -> %{"x" => x, "y" => y} end) end
 
+x_limit = [-10, 10]
+y_limit = [0, 0.5]
 x0 = 0
 h = 1
 m = 20
@@ -95,20 +97,85 @@ camel_data = zip_x_y.(x, y)
 
 add_category = fn map, category -> Map.put(map, "category", category) end
 
+bin_radius = 0.5
+
+bins =
+  Enum.at(x_limit, 0)..round(Enum.at(x_limit, 1) - bin_radius * 2)
+  |> Enum.to_list()
+  |> Enum.map(&(&1 + bin_radius))
+  |> Enum.reduce(%{}, fn x, acc ->
+    acc |> Map.put(x, [])
+  end)
+
+x = 3.8
+
+find_right_bin = fn bins, x ->
+  bins
+  |> Map.to_list()
+  |> Enum.find(fn {bin, _list} -> bin - bin_radius < x and x < bin + bin_radius end)
+end
+
+find_right_bin.(bins, x)
+
+linear_scale = fn value, min_original, max_original, min_range, max_range ->
+  scaled_value =
+    min_range +
+      (value - min_original) / (max_original - min_original) * (max_range - min_range)
+
+  # round(scaled_value)
+end
+
+linear_scale.(12, 0, 12, 0, 0.5)
+
+[{9.5, [1, 2, 3, 4]}, {8.5, [7, 8, 3, 1]}]
+# bins
+histogram =
+  [normal_points_data, normal_points_moved_right_data]
+  |> List.flatten()
+  |> Enum.map(fn %{"x" => x} -> x end)
+  |> Enum.reduce(bins, fn x, acc ->
+    right_bin = find_right_bin.(acc, x)
+
+    case right_bin do
+      nil -> acc
+      {key, list} -> acc |> Map.put(key, [x | list])
+    end
+  end)
+  |> Map.to_list()
+  |> Enum.map(fn {key, values} -> {key, values |> Enum.count()} end)
+
+IO.inspect(histogram)
+max_count = histogram |> Enum.map(fn {_key, count} -> count end) |> Enum.max()
+
+frequency_histogram =
+  histogram
+  |> Enum.map(fn {key, count} ->
+    # %{key => 
+    #   linear_scale.(count, 0, max_count, Enum.at(y_limit,0), Enum.at(y_limit, 1))
+    # } 
+    %{
+      "x" => key,
+      "y" => linear_scale.(count, 0, max_count, Enum.at(y_limit, 0), Enum.at(y_limit, 1))
+    }
+  end)
+
+IO.inspect(frequency_histogram)
+# IO.inspect(frequency_histogram |> Enum.map(& add_category.(&1, "E")))
+# |> Enum.redu
+# |> Enum.map(fn {key, values} -> %{key => values |> Enum.count()} end)
+
 data =
   [
     normal_points_data |> Enum.map(&add_category.(&1, "A")),
     normal_distribution_line |> Enum.map(&add_category.(&1, "B")),
     normal_points_moved_right_data |> Enum.map(&add_category.(&1, "C")),
-    camel_data |> Enum.map(&add_category.(&1, "D"))
+    camel_data |> Enum.map(&add_category.(&1, "D")),
+    frequency_histogram |> Enum.map(&add_category.(&1, "E"))
   ]
   |> List.flatten()
 ```
 
 ```elixir
-x_limit = [-10, 10]
-y_limit = [0, 0.5]
-
 Vl.new(width: 600, height: 400)
 |> Vl.data_from_values(data, only: ["x", "y", "category"])
 |> Vl.layers([
@@ -135,6 +202,20 @@ Vl.new(width: 600, height: 400)
   |> Vl.mark(:line)
   |> Vl.encode_field(:x, "x", type: :quantitative, scale: %{domain: x_limit})
   |> Vl.encode_field(:y, "y", type: :quantitative, scale: %{domain: y_limit})
-  |> Vl.encode_field(:color, "category", type: :nominal)
+  |> Vl.encode_field(:color, "category", type: :nominal),
+  Vl.new()
+  #  || datum.category == 'C'
+  |> Vl.transform(filter: "datum.category == 'E'")
+  # |> Vl.transform(density: "camel")
+  # |> Vl.mark(:area)
+  |> Vl.mark(:bar)
+  # , bin: true, scale: %{domain: x_limit}
+  |> Vl.encode_field(:x, "x", type: :quantitative, title: "camel")
+  # |> Vl.encode_field(:x, "x",  type: :quantitative, bin: true, scale: %{domain: x_limit})
+  # aggregate: :count #type: :quantitative, scale: %{domain: y_limit}
+  |> Vl.encode_field(:y, "y", type: :quantitative)
+  # |> Vl.encode_field(:y, "y", type: :quantitative, aggregate: :count, scale: %{domain: y_limit}) # aggregate: :count #type: :quantitative, scale: %{domain: y_limit}
+  # |> Vl.encode(:size, aggregate: :count)
+  # |> Vl.encode_field(:color, "category", type: :nominal)
 ])
 ```
